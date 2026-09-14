@@ -223,17 +223,18 @@ func TestSSHExempt(t *testing.T) {
 	seedZone(t, dir, "CH", source.Family4, "1.2.3.0/24\n")
 	fr := &firewall.FakeRunner{}
 
-	r := runCLI(t, testDeps(fr), "block", "CH", "--ssh-exempt", "1.2.3.4",
+	r := runCLI(t, testDeps(fr), "block", "CH", "--ssh-exempt", "1.2.3.4,192.168.1.1/24",
 		"--cache-dir", dir, "--max-age", "1000h")
 	if r.code != 0 {
 		t.Fatalf("exit code = %d, want 0 (stderr=%q)", r.code, r.stderr)
 	}
 	_, ok := findCall(fr.Calls, func(c firewall.Call) bool {
 		return c.Name == "ipset" && len(c.Args) > 0 && c.Args[0] == "restore" &&
-			strings.Contains(c.Stdin, "geoip_ssh_exempt4") && strings.Contains(c.Stdin, "1.2.3.4/32")
+			strings.Contains(c.Stdin, "geoip_ssh_exempt4") && strings.Contains(c.Stdin, "1.2.3.4/32") &&
+			strings.Contains(c.Stdin, "192.168.1.0/24")
 	})
 	if !ok {
-		t.Fatalf("no ssh-exempt restore carrying 1.2.3.4/32; calls=%+v", fr.Calls)
+		t.Fatalf("no ssh-exempt restore carrying 1.2.3.4/32 and 192.168.1.0/24; calls=%+v", fr.Calls)
 	}
 
 	r = runCLI(t, testDeps(&firewall.FakeRunner{}), "block", "CH", "--ssh-exempt", "nope",

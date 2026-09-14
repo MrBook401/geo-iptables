@@ -53,7 +53,7 @@ written before the positional country codes.
 Common flags for block/allow/apply:
   --v4                 manage IPv4 rules (default true)
   --v6                 manage IPv6 rules (default false)
-  --ssh-exempt LIST    comma-separated IP addresses exempt from blocking
+  --ssh-exempt LIST    comma-separated IP addresses or CIDR networks exempt from blocking
   --log                log dropped packets
   --dry-run            print commands without executing them
   --cache-dir DIR      zone cache directory (default: user cache dir)
@@ -153,7 +153,7 @@ func parseFlags(fs *flag.FlagSet, args []string) (positional []string, code int,
 func addCommonFlags(fs *flag.FlagSet, cf *commonFlags) {
 	fs.BoolVar(&cf.v4, "v4", true, "manage IPv4 rules")
 	fs.BoolVar(&cf.v6, "v6", false, "manage IPv6 rules")
-	fs.StringVar(&cf.sshExempt, "ssh-exempt", "", "comma-separated IP addresses exempt from blocking")
+	fs.StringVar(&cf.sshExempt, "ssh-exempt", "", "comma-separated IP addresses or CIDR networks exempt from blocking")
 	fs.BoolVar(&cf.log, "log", false, "log dropped packets")
 	fs.BoolVar(&cf.dryRun, "dry-run", false, "print commands without executing them")
 	fs.StringVar(&cf.cacheDir, "cache-dir", cache.DefaultDir(), "zone cache directory")
@@ -196,15 +196,21 @@ func warnTo(stderr io.Writer) func(string, ...any) {
 	}
 }
 
-// parseSSHExempt parses a comma-separated list of plain IP addresses.
-func parseSSHExempt(s string, stderr io.Writer) ([]netip.Addr, bool) {
+// parseSSHExempt parses a comma-separated list of IP addresses or CIDR
+// networks. Host addresses are normalized to /32 or /128 and CIDR prefixes are
+// masked to their network address.
+func parseSSHExempt(s string, stderr io.Writer) ([]netip.Prefix, bool) {
 	if strings.TrimSpace(s) == "" {
 		return nil, true
 	}
-	var addrs []netip.Addr
+	var prefixes []netip.Prefix
 	for _, part := range strings.Split(s, ",") {
 		part = strings.TrimSpace(part)
 		if part == "" {
+			continue
+		}
+		if p, err := netip.ParsePrefix(part); err == nil {
+			prefixes = append(prefixes, p.Masked())
 			continue
 		}
 		a, err := netip.ParseAddr(part)
@@ -212,9 +218,9 @@ func parseSSHExempt(s string, stderr io.Writer) ([]netip.Addr, bool) {
 			fmt.Fprintf(stderr, "geo-iptables: invalid ssh-exempt address %q\n", part)
 			return nil, false
 		}
-		addrs = append(addrs, a)
+		prefixes = append(prefixes, netip.PrefixFrom(a, a.BitLen()))
 	}
-	return addrs, true
+	return prefixes, true
 }
 
 // newStore builds a cache.Store from the parsed flags and dependencies.

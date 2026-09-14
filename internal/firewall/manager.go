@@ -38,7 +38,7 @@ func SetName(kind string, num int) string {
 type Request struct {
 	Allow     []netip.Prefix
 	Block     []netip.Prefix
-	SSHExempt []netip.Addr
+	SSHExempt []netip.Prefix
 	IPv4      bool
 	IPv6      bool
 	Log       bool
@@ -82,7 +82,7 @@ func (m *Manager) Apply(ctx context.Context, req Request) error {
 func (m *Manager) applyFamily(ctx context.Context, fam family, req Request) error {
 	allow := prefixesFor(req.Allow, fam.Num)
 	block := prefixesFor(req.Block, fam.Num)
-	ssh := addrsFor(req.SSHExempt, fam.Num)
+	ssh := prefixesFor(req.SSHExempt, fam.Num)
 
 	if len(allow) > 0 {
 		if err := m.loadSet(ctx, SetName(setAllow, fam.Num), fam.Kernel, allow); err != nil {
@@ -95,11 +95,7 @@ func (m *Manager) applyFamily(ctx context.Context, fam family, req Request) erro
 		}
 	}
 	if len(ssh) > 0 {
-		prefixes := make([]netip.Prefix, 0, len(ssh))
-		for _, a := range ssh {
-			prefixes = append(prefixes, netip.PrefixFrom(a, a.BitLen()))
-		}
-		if err := m.loadSet(ctx, SetName(setSSHExempt, fam.Num), fam.Kernel, prefixes); err != nil {
+		if err := m.loadSet(ctx, SetName(setSSHExempt, fam.Num), fam.Kernel, ssh); err != nil {
 			return err
 		}
 	}
@@ -212,7 +208,7 @@ func buildRules(fam family, req Request) [][]string {
 		rules = append(rules, []string{"-p", "udp", "--sport", "67", "--dport", "68", "-j", "RETURN"})
 	}
 	// 5. SSH exemption.
-	if len(addrsFor(req.SSHExempt, fam.Num)) > 0 {
+	if len(prefixesFor(req.SSHExempt, fam.Num)) > 0 {
 		rules = append(rules, []string{"-m", "set", "--match-set", SetName(setSSHExempt, fam.Num), "src", "-j", "RETURN"})
 	}
 	// 6. Blocked countries take precedence.
@@ -250,19 +246,6 @@ func prefixesFor(ps []netip.Prefix, num int) []netip.Prefix {
 		}
 		if num == 6 && p.Addr().Is6() {
 			out = append(out, p)
-		}
-	}
-	return out
-}
-
-func addrsFor(as []netip.Addr, num int) []netip.Addr {
-	var out []netip.Addr
-	for _, a := range as {
-		if num == 4 && a.Is4() {
-			out = append(out, a)
-		}
-		if num == 6 && a.Is6() {
-			out = append(out, a)
 		}
 	}
 	return out

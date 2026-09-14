@@ -75,7 +75,7 @@ Flags common to `block`, `allow` and `apply`:
 | --- | --- | --- |
 | `--v4` | `true` | Manage IPv4 rules. |
 | `--v6` | `false` | Manage IPv6 rules. |
-| `--ssh-exempt LIST` | | Comma-separated plain IP addresses that always bypass the block list. |
+| `--ssh-exempt LIST` | | Comma-separated IP addresses or CIDR networks that always bypass the block list. |
 | `--log` | `false` | Log dropped packets (rate-limited to 10/min). |
 | `--dry-run` | `false` | Print commands instead of executing them. |
 | `--cache-dir DIR` | user cache dir | Zone cache directory (`${XDG_CACHE_HOME:-$HOME/.cache}/geo-iptables`). |
@@ -119,11 +119,11 @@ dropped.
 ### Keep your own address reachable
 
 ```bash
-sudo geo-iptables apply --allow CH --ssh-exempt 203.0.113.7
+sudo geo-iptables apply --allow CH --ssh-exempt 203.0.113.7,192.168.1.0/24
 ```
 
-Exempt addresses return before the block and allow-list rules, so your admin IP
-is never dropped.
+Exempt addresses and networks return before the block and allow-list rules, so
+your admin IP is never dropped.
 
 ### Preview changes
 
